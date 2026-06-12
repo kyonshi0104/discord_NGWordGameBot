@@ -24,7 +24,7 @@ class MyClient(discord.Client):
 client = MyClient()
 
 # --- Load data from JSON files ---
-# ファイルが存在しない場合の初期化
+
 def load_json(filepath, default_data):
     if os.path.exists(filepath):
         with open(filepath, "r", encoding="utf-8") as f:
@@ -86,19 +86,24 @@ async def ngwords_set(interaction: discord.Interaction, words: str):
     user_locale = interaction.locale.value.split("-")[0]
 
     if interaction.guild is None:
-        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+        return await interaction.response.send_message(_("ERR_NOT_IN_A_SERVER", user_locale), ephemeral=True)
     
     sid = str(interaction.guild.id)
     uid = str(interaction.user.id)
     
-    # ゲーム除外ユーザーのチェック
     if uid in guild_settings.get(sid, {}).get("nogame", []):
         return await interaction.response.send_message(_("ERR_NO_PERMISSION", user_locale), ephemeral=True)
+
+    max_limit = guild_settings.get(sid, {}).get("max_ngwords", 1)
+    current_words = ngwords.get(sid, {}).get(uid, [])
+
+    if len(current_words) >= max_limit:
+        return await interaction.response.send_message(_("ERR_NGWORD_LIMIT_REACHED", user_locale).format(max_limit=max_limit), ephemeral=True)
     
-    # 登録制限ロジック（1人1単語制限の例）
-    if uid in ngwords.get(sid, {}):
+    if words in current_words:
         return await interaction.response.send_message(_("ERR_ALREADY_SET_NGWORD", user_locale), ephemeral=True)
-    elif not (2 <= len(words) <= 10):
+
+    if not (2 <= len(words) <= 10):
         return await interaction.response.send_message(_("ERR_INVALID_NGWORD_COUNT", user_locale), ephemeral=True)
         
     ngwords.setdefault(sid, {}).setdefault(uid, [])
@@ -113,7 +118,7 @@ async def ngwords_unset(interaction: discord.Interaction, words: str):
     user_locale = interaction.locale.value.split("-")[0]
     
     if interaction.guild is None:
-        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+        return await interaction.response.send_message(_("ERR_NOT_IN_A_SERVER", user_locale), ephemeral=True)
     
     sid = str(interaction.guild.id)
     uid = str(interaction.user.id)
@@ -134,7 +139,7 @@ async def ngwords_list(interaction: discord.Interaction):
     user_locale = interaction.locale.value.split("-")[0]
     
     if interaction.guild is None:
-        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+        return await interaction.response.send_message(_("ERR_NOT_IN_A_SERVER", user_locale), ephemeral=True)
     
     sid = str(interaction.guild.id)
     uid = str(interaction.user.id)
@@ -152,7 +157,7 @@ async def game_exclude(interaction: discord.Interaction, user: discord.Member):
     user_locale = interaction.locale.value.split("-")[0]
     
     if interaction.guild is None:
-        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+        return await interaction.response.send_message(_("ERR_NOT_IN_A_SERVER", user_locale), ephemeral=True)
         
     server_id = str(interaction.guild.id)
 
@@ -172,7 +177,7 @@ async def game_penalty(interaction: discord.Interaction, penalty: Literal["mute"
     user_locale = interaction.locale.value.split("-")[0]
     
     if interaction.guild is None:
-        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+        return await interaction.response.send_message(_("ERR_NOT_IN_A_SERVER", user_locale), ephemeral=True)
         
     server_id = str(interaction.guild.id)
 
@@ -190,13 +195,34 @@ async def game_penalty(interaction: discord.Interaction, penalty: Literal["mute"
     penalties_save()
     await interaction.response.send_message(_("GAME_PENALTY_SUCCESS", user_locale).format(penalty=penalty_value), ephemeral=True)
 
+@client.tree.command(name="ngwords_max_setting", description="1ユーザーあたりのNGワード登録上限を設定します")
+@app_commands.describe(limit="登録上限数 (1〜10)")
+async def ngwords_max_setting(interaction: discord.Interaction, limit: int):
+    user_locale = interaction.locale.value.split("-")[0]
+
+    if interaction.guild is None:
+        return await interaction.response.send_message(_("ERR_NOT_IN_A_SERVER", user_locale), ephemeral=True)
+
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message(_("ERR_CANNOT_SET_PENALTY", user_locale), ephemeral=True)
+
+    if not (1 <= limit <= 10):
+        return await interaction.response.send_message(_("ERR_INVALID_LIMIT_RANGE", user_locale), ephemeral=True)
+
+    server_id = str(interaction.guild.id)
+    
+    guild_settings.setdefault(server_id, {})["max_ngwords"] = limit
+    guild_settings_save()
+
+    await interaction.response.send_message(_("NGWORD_MAX_SET_SUCCESS", user_locale).format(limit=limit), ephemeral=True)
+
 @client.tree.command(name="game_fallback_setting", description="権限不足時の代替タイムアウト(メッセージ削除)を有効にします")
 @app_commands.describe(enable="有効にする場合はTrue")
 async def game_fallback_setting(interaction: discord.Interaction, enable: bool):
     user_locale = interaction.locale.value.split("-")[0]
     
     if interaction.guild is None:
-        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+        return await interaction.response.send_message(_("ERR_NOT_IN_A_SERVER", user_locale), ephemeral=True)
         
     if not interaction.user.guild_permissions.administrator:
         return await interaction.response.send_message(_("ERR_CANNOT_SET_PENALTY", user_locale), ephemeral=True)
@@ -208,14 +234,14 @@ async def game_fallback_setting(interaction: discord.Interaction, enable: bool):
     guild_settings_save()
 
     status_text = "有効" if enable else "無効"
-    await interaction.response.send_message(f"権限不足時の代替タイムアウト措置（メッセージ即時削除）を **{status_text}** に設定しました。", ephemeral=True)
+    await interaction.response.send_message(_("GAME_FALLBACK_SET_SUCCESS", user_locale).format(status=status_text), ephemeral=True)
 
 @client.tree.command(name="game_status", description="Check the game status of a user.")
 async def game_status(interaction: discord.Interaction):
     user_locale = interaction.locale.value.split("-")[0]
     
     if interaction.guild is None:
-        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+        return await interaction.response.send_message(_("ERR_NOT_IN_A_SERVER", user_locale), ephemeral=True)
         
     server_id = str(interaction.guild.id)
     user_id = str(interaction.user.id)
@@ -238,7 +264,7 @@ async def game_status(interaction: discord.Interaction):
     mute_status = "なし"
     if mute_until:
         if datetime.datetime.now().timestamp() < mute_until:
-            mute_status = f"<t:{int(mute_until)}:R> まで代替措置中"
+            mute_status = _("STATUS_FALLBACK_ACTIVE", user_locale).format(time=int(mute_until))
         else:
             del fallback_mutes[server_id][user_id]
             fallback_mutes_save()
@@ -297,9 +323,13 @@ async def on_message(message):
             break
 
     if detected_word:
+        # サーバーの設定言語を取得
+        guild_locale = message.guild.preferred_locale.split("-")[0]
+
         embed = discord.Embed(
-            title="NGWORD_DETECTED",
-            description=f"NGワードが検出されました: **{detected_word}**\n設定者: <@{target_user_id}>",
+            title=_("NGWORD_DETECTED_TITLE", guild_locale),
+            # 【重要】locales.jsonの定義に合わせて、formatに user=target_user_id を追加
+            description=_("NGWORD_DETECTED_DESC", guild_locale).format(word=detected_word, user=target_user_id),
             color=discord.Color.red()
         )
         
@@ -313,15 +343,14 @@ async def on_message(message):
                     if duration:
                         until_time = discord.utils.utcnow() + duration
                         await message.author.timeout(until_time, reason="Used an NG word.")
-                        embed.add_field(name="✅ ペナルティ適用", value=f"タイムアウト（{duration_str}）を適用しました。", inline=False)
+                        embed.add_field(name=_("PENALTY_APPLIED_TITLE", guild_locale), value=_("PENALTY_APPLIED_TIMEOUT", guild_locale).format(duration=duration_str), inline=False)
                 elif server_penalty == "kick":
                     await message.author.kick(reason="Used an NG word.")
-                    embed.add_field(name="✅ ペナルティ適用", value="サーバーからキックしました。", inline=False)
+                    embed.add_field(name=_("PENALTY_APPLIED_TITLE", guild_locale), value=_("PENALTY_APPLIED_KICK", guild_locale), inline=False)
                 elif server_penalty == "ban":
                     await message.author.ban(reason="Used an NG word.")
-                    embed.add_field(name="✅ ペナルティ適用", value="サーバーからBANしました。", inline=False)
+                    embed.add_field(name=_("PENALTY_APPLIED_TITLE", guild_locale), value=_("PENALTY_APPLIED_BAN", guild_locale), inline=False)
             except discord.Forbidden:
-                # 権限エラー時のフォールバック処理
                 fallback_enabled = guild_settings.get(server_id, {}).get("fallback_delete", False)
 
                 if fallback_enabled and duration:
@@ -330,14 +359,14 @@ async def on_message(message):
                     fallback_mutes_save()
                     
                     embed.add_field(
-                        name="⚠️ 権限不足 (代替措置適用)",
-                        value=f"タイムアウト権限が不足しているため、<t:{int(end_time)}:R> までメッセージを即時削除する措置を適用しました。",
+                        name=_("PENALTY_FALLBACK_TITLE", guild_locale),
+                        value=_("PENALTY_FALLBACK_DESC", guild_locale).format(time=int(end_time)),
                         inline=False
                     )
                 else:
                     embed.add_field(
-                        name="⚠️ ペナルティ適用失敗",
-                        value="Botの権限が不足している、または対象ユーザーの役職がBotより高いため、ペナルティを付与できませんでした。",
+                        name=_("PENALTY_FAILED_TITLE", guild_locale),
+                        value=_("PENALTY_FAILED_DESC", guild_locale),
                         inline=False
                     )
                 print(f"Failed to apply penalty to {message.author.name} due to missing permissions.")
