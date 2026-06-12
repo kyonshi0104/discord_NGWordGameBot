@@ -52,26 +52,6 @@ def _(phrase_key, locale="en"):
 
 # --- Utility functions ---
 
-async def guild_autocomplete(
-    interaction: discord.Interaction, 
-    current: str
-) -> list[app_commands.Choice[str]]:
-    """Botが参加しており、かつユーザーも所属しているサーバーの一覧を自動補完の候補として返す"""
-    choices = []
-    
-    for guild in client.guilds:
-        member = await guild.fetch_member(interaction.user.id)
-        if member is None:
-            continue  # 所属していないサーバーは候補に出さない
-            
-        if current.lower() in guild.name.lower():
-            choices.append(
-                app_commands.Choice(name=guild.name, value=str(guild.id))
-            )
-            
-    # Discordの仕様制限より:25
-    return choices[:25]
-
 def parse_duration(duration_str: str) -> datetime.timedelta | None:
     """Parse a duration string (e.g., "10s", "5m", "2h", "1d") and return a timedelta object."""
     match = re.match(r"^(\d+)([smhd])$", duration_str.lower().strip())
@@ -94,23 +74,21 @@ def parse_duration(duration_str: str) -> datetime.timedelta | None:
 # --- Commands ---
 
 @client.tree.command(name="ngwords_set", description="Set NG words for the server.")
-@app_commands.describe(server_id="対象のサーバー（自動補完から選択）", words="設定するNGワード")
-@app_commands.autocomplete(server_id=guild_autocomplete) # 自動補完を結びつける
-async def ngwords_set(interaction: discord.Interaction, server_id: str, words: str):
+@app_commands.describe(words="設定するNGワード")
+async def ngwords_set(interaction: discord.Interaction, words: str):
     user_locale = interaction.locale.value.split("-")[0]
+
+    if interaction.guild is None:
+        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
     
-    if interaction.guild is not None:
-        return await interaction.response.send_message(_("ERR_IN_A_SERVER", user_locale), ephemeral=True)
-    server = client.get_guild(int(server_id))
-    if not server or await server.fetch_member(interaction.user.id) is None:
-        return await interaction.response.send_message(_("ERR_NO_PERMISSION", user_locale), ephemeral=True)
-        
-    sid = server_id
+    sid = str(interaction.guild.id)
     uid = str(interaction.user.id)
     
+    # ゲーム除外ユーザーのチェック
     if uid in guild_settings.get(sid, {}).get("nogame", []):
         return await interaction.response.send_message(_("ERR_NO_PERMISSION", user_locale), ephemeral=True)
     
+    # 登録制限ロジック（1人1単語制限の例）
     if uid in ngwords.get(sid, {}):
         return await interaction.response.send_message(_("ERR_ALREADY_SET_NGWORD", user_locale), ephemeral=True)
     elif not (2 <= len(words) <= 10):
@@ -119,17 +97,18 @@ async def ngwords_set(interaction: discord.Interaction, server_id: str, words: s
     ngwords.setdefault(sid, {}).setdefault(uid, [])
     ngwords[sid][uid].append(words)
     ngwords_save()
-    await interaction.response.send_message(_("NGWORD_SET_SUCCESS", user_locale))
+
+    await interaction.response.send_message(_("NGWORD_SET_SUCCESS", user_locale), ephemeral=True)
 
 @client.tree.command(name="ngwords_unset", description="Unset NG words for the server.")
-@app_commands.describe(server_id="対象のサーバー", words="削除するNGワード")
-@app_commands.autocomplete(server_id=guild_autocomplete)
-async def ngwords_unset(interaction: discord.Interaction, server_id: str, words: str):
+@app_commands.describe(words="削除するNGワード")
+async def ngwords_unset(interaction: discord.Interaction, words: str):
     user_locale = interaction.locale.value.split("-")[0]
-    if interaction.guild is not None:
-        return await interaction.response.send_message(_("ERR_IN_A_SERVER", user_locale), ephemeral=True)
     
-    sid = server_id
+    if interaction.guild is None:
+        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+    
+    sid = str(interaction.guild.id)
     uid = str(interaction.user.id)
     
     if uid in guild_settings.get(sid, {}).get("nogame", []):
@@ -144,14 +123,13 @@ async def ngwords_unset(interaction: discord.Interaction, server_id: str, words:
     await interaction.response.send_message(_("NGWORD_UNSET_SUCCESS", user_locale), ephemeral=True)
 
 @client.tree.command(name="ngwords_list", description="List NG words for the server.")
-@app_commands.describe(server_id="対象のサーバー")
-@app_commands.autocomplete(server_id=guild_autocomplete)
-async def ngwords_list(interaction: discord.Interaction, server_id: str):
+async def ngwords_list(interaction: discord.Interaction):
     user_locale = interaction.locale.value.split("-")[0]
-    if interaction.guild is not None:
-        return await interaction.response.send_message(_("ERR_IN_A_SERVER", user_locale), ephemeral=True)
     
-    sid = server_id
+    if interaction.guild is None:
+        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+    
+    sid = str(interaction.guild.id)
     uid = str(interaction.user.id)
     
     if uid in guild_settings.get(sid, {}).get("nogame", []):
@@ -163,7 +141,7 @@ async def ngwords_list(interaction: discord.Interaction, server_id: str):
     await interaction.response.send_message(_("NGWORD_LIST_SUCCESS", user_locale).format(words=", ".join(user_ngwords)), ephemeral=True)
 
 @client.tree.command(name="game_exclude", description="Exclude a user from the game.")
-async def game_exclude(interaction: discord.Interaction, user: discord.Member): # discord.Memberに変更
+async def game_exclude(interaction: discord.Interaction, user: discord.Member):
     user_locale = interaction.locale.value.split("-")[0]
     
     if interaction.guild is None:
@@ -230,7 +208,7 @@ async def game_status(interaction: discord.Interaction):
         description=f"**NGword count:** {len(ngwords.get(server_id, {}).get(user_id, []))}\n**Server Penalty:** {server_penalty}\n**Excluded Users:** {excluded_str}",
         color=discord.Color.blue()
     )
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message(embed=embed)
 
 # --- Event handlers ---
 
