@@ -60,7 +60,7 @@ async def guild_autocomplete(
     choices = []
     
     for guild in client.guilds:
-        member = guild.fetch_member(interaction.user.id)
+        member = await guild.fetch_member(interaction.user.id)
         if member is None:
             continue  # 所属していないサーバーは候補に出さない
             
@@ -102,7 +102,7 @@ async def ngwords_set(interaction: discord.Interaction, server_id: str, words: s
     if interaction.guild is not None:
         return await interaction.response.send_message(_("ERR_IN_A_SERVER", user_locale), ephemeral=True)
     server = client.get_guild(int(server_id))
-    if not server or server.get_member(interaction.user.id) is None:
+    if not server or await server.fetch_member(interaction.user.id) is None:
         return await interaction.response.send_message(_("ERR_NO_PERMISSION", user_locale), ephemeral=True)
         
     sid = server_id
