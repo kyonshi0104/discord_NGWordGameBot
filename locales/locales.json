@@ -1,0 +1,42 @@
+{
+    "ja": {
+        "ERR_IN_A_SERVER": "このコマンドはサーバー内では使用できません。",
+        "ERR_NO_PERMISSION": "このコマンドを使用する権限がありません。",
+        "ERR_INVALID_COMMAND": "無効なコマンドです。",
+        "ERR_ALREADY_SET_NGWORD": "すでにNGワードが設定されています。",
+        "ERR_INVALID_NGWORD_COUNT": "NGワードは2文字以上10文字以下でなければなりません。",
+        "ERR_INVALID_NGWORD_CHAR": "NGワードにはスペース、タブ、改行を含めることはできません。",
+        "ERR_NGWORD_NOT_FOUND": "NGワードが見つかりません。",
+        "ERR_CANNOT_EXCLUDE_USER": "あなたはそのユーザーを除外できません。",
+        "ERR_INVALID_DURATION": "無効な期間形式です。例: '10s', '5m', '2h', '1d'",
+        "ERR_NO_NGWORD_SET": "あなたが設定したNGワードは登録されていません。",
+        "ERR_CANNOT_SET_PENALTY": "ペナルティを設定する権限がありません（管理者のみ）。",
+        "NGWORD_SET_SUCCESS": "NGワードの登録に成功しました。",
+        "NGWORD_UNSET_SUCCESS": "NGワードを削除しました。",
+        "NGWORD_LIST_SUCCESS": "あなたが設定したNGワード一覧: {words}",
+        "GAME_EXCLUDE_SUCCESS": "{user} をゲームの対象から除外しました。",
+        "GAME_PENALTY_SUCCESS": "サーバーのペナルティを `{penalty}` に設定しました。",
+        "GAME_STATUS_EXCLUDED": "あなたはゲームの対象から除外されています。",
+        "GAME_STATUS_NO_PENALTY": "このサーバーにはまだペナルティが設定されていません。"
+    },
+    "en": {
+        "ERR_IN_A_SERVER": "This command cannot be used in a server.",
+        "ERR_NO_PERMISSION": "You do not have permission to use this command.",
+        "ERR_INVALID_COMMAND": "Invalid command.",
+        "ERR_ALREADY_SET_NGWORD": "NG word is already set.",
+        "ERR_INVALID_NGWORD_COUNT": "NG word must be between 2 and 10 characters long.",
+        "ERR_INVALID_NGWORD_CHAR": "NG word cannot contain spaces, tabs, or newlines.",
+        "ERR_NGWORD_NOT_FOUND": "NG word not found.",
+        "ERR_CANNOT_EXCLUDE_USER": "You cannot exclude that user.",
+        "ERR_INVALID_DURATION": "Invalid duration format. Examples: '10s', '5m', '2h', '1d'",
+        "ERR_NO_NGWORD_SET": "You have not set any NG words.",
+        "ERR_CANNOT_SET_PENALTY": "You do not have permission to set a penalty (Administrators only).",
+        "NGWORD_SET_SUCCESS": "NG word has been successfully set.",
+        "NGWORD_UNSET_SUCCESS": "NG word has been successfully removed.",
+        "NGWORD_LIST_SUCCESS": "Your set NG words: {words}",
+        "GAME_EXCLUDE_SUCCESS": "Successfully excluded {user} from the game.",
+        "GAME_PENALTY_SUCCESS": "Server penalty has been set to `{penalty}`.",
+        "GAME_STATUS_EXCLUDED": "You are excluded from the game.",
+        "GAME_STATUS_NO_PENALTY": "No penalty has been set for this server yet."
+    }
+}
