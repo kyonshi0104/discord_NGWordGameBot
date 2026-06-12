@@ -35,6 +35,11 @@ guild_settings = load_json("data/guild_settings.json", {})
 ngwords = load_json("data/ngwords.json", {})
 penalties = load_json("data/penalties.json", {})
 locales = load_json("locales/locales.json", {})
+fallback_mutes = load_json("data/fallback_mutes.json", {})
+
+def fallback_mutes_save():
+    with open("data/fallback_mutes.json", "w", encoding="utf-8") as f:
+        json.dump(fallback_mutes, f, indent=4, ensure_ascii=False)
 
 def ngwords_save():
     with open("data/ngwords.json", "w", encoding="utf-8") as f:
@@ -185,6 +190,26 @@ async def game_penalty(interaction: discord.Interaction, penalty: Literal["mute"
     penalties_save()
     await interaction.response.send_message(_("GAME_PENALTY_SUCCESS", user_locale).format(penalty=penalty_value), ephemeral=True)
 
+@client.tree.command(name="game_fallback_setting", description="権限不足時の代替タイムアウト(メッセージ削除)を有効にします")
+@app_commands.describe(enable="有効にする場合はTrue")
+async def game_fallback_setting(interaction: discord.Interaction, enable: bool):
+    user_locale = interaction.locale.value.split("-")[0]
+    
+    if interaction.guild is None:
+        return await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+        
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message(_("ERR_CANNOT_SET_PENALTY", user_locale), ephemeral=True)
+
+    server_id = str(interaction.guild.id)
+    
+    # guild_settingsに設定を保存
+    guild_settings.setdefault(server_id, {})["fallback_delete"] = enable
+    guild_settings_save()
+
+    status_text = "有効" if enable else "無効"
+    await interaction.response.send_message(f"権限不足時の代替タイムアウト措置（メッセージ即時削除）を **{status_text}** に設定しました。", ephemeral=True)
+
 @client.tree.command(name="game_status", description="Check the game status of a user.")
 async def game_status(interaction: discord.Interaction):
     user_locale = interaction.locale.value.split("-")[0]
@@ -205,9 +230,28 @@ async def game_status(interaction: discord.Interaction):
     excluded_mentions = [f"<@{uid}>" for uid in guild_settings.get(server_id, {}).get("nogame", [])]
     excluded_str = ", ".join(excluded_mentions) if excluded_mentions else "None"
     
+    # --- 代替措置のステータス取得を追加 ---
+    fallback_enabled = guild_settings.get(server_id, {}).get("fallback_delete", False)
+    fallback_str = "有効" if fallback_enabled else "無効"
+
+    mute_until = fallback_mutes.get(server_id, {}).get(user_id)
+    mute_status = "なし"
+    if mute_until:
+        if datetime.datetime.now().timestamp() < mute_until:
+            mute_status = f"<t:{int(mute_until)}:R> まで代替措置中"
+        else:
+            del fallback_mutes[server_id][user_id]
+            fallback_mutes_save()
+
     embed = discord.Embed(
         title="GAME STATUS",
-        description=f"**NGword count:** {len(ngwords.get(server_id, {}).get(user_id, []))}\n**Server Penalty:** {server_penalty}\n**Excluded Users:** {excluded_str}",
+        description=(
+            f"**NGword count:** {len(ngwords.get(server_id, {}).get(user_id, []))}\n"
+            f"**Server Penalty:** {server_penalty}\n"
+            f"**Fallback Setting:** {fallback_str}\n"
+            f"**Current Fallback:** {mute_status}\n"
+            f"**Excluded Users:** {excluded_str}"
+        ),
         color=discord.Color.blue()
     )
     await interaction.response.send_message(embed=embed)
@@ -222,15 +266,27 @@ async def on_message(message):
     server_id = str(message.guild.id)
     user_id = str(message.author.id)
 
+    mute_until = fallback_mutes.get(server_id, {}).get(user_id)
+    if mute_until:
+        if datetime.datetime.now().timestamp() < mute_until:
+            try:
+                await message.delete()
+            except discord.Forbidden:
+                pass
+            return
+        else:
+            del fallback_mutes[server_id][user_id]
+            if not fallback_mutes[server_id]:
+                del fallback_mutes[server_id]
+            fallback_mutes_save()
+
     if user_id in guild_settings.get(server_id, {}).get("nogame", []):
         return
     
     server_ng_dict = ngwords.get(server_id, {})
-
     detected_word = None
     target_user_id = None
 
-    # メッセージ内の単語チェック
     for setter_id, words in server_ng_dict.items():
         for word in words:
             if word in message.content:
@@ -243,12 +299,13 @@ async def on_message(message):
     if detected_word:
         embed = discord.Embed(
             title="NGWORD_DETECTED",
-            description=f"NGワードが検出されました: **{detected_word}**\n設定者: <@{target_user_id}>\n設定者はNGワードを再設定できます。",
+            description=f"NGワードが検出されました: **{detected_word}**\n設定者: <@{target_user_id}>",
             color=discord.Color.red()
         )
         
         server_penalty = penalties.get(server_id)
         if server_penalty:
+            duration = None
             try:
                 if server_penalty.startswith("mute-"):
                     duration_str = server_penalty.split("-")[1]
@@ -256,23 +313,39 @@ async def on_message(message):
                     if duration:
                         until_time = discord.utils.utcnow() + duration
                         await message.author.timeout(until_time, reason="Used an NG word.")
+                        embed.add_field(name="✅ ペナルティ適用", value=f"タイムアウト（{duration_str}）を適用しました。", inline=False)
                 elif server_penalty == "kick":
                     await message.author.kick(reason="Used an NG word.")
+                    embed.add_field(name="✅ ペナルティ適用", value="サーバーからキックしました。", inline=False)
                 elif server_penalty == "ban":
                     await message.author.ban(reason="Used an NG word.")
+                    embed.add_field(name="✅ ペナルティ適用", value="サーバーからBANしました。", inline=False)
             except discord.Forbidden:
-                embed.add_field(
-                    name="⚠️ ペナルティ適用失敗",
-                    value="Botの権限が不足している、または対象ユーザーの役職がBotより高いため、ペナルティを付与できませんでした。",
-                    inline=False
-                )
+                # 権限エラー時のフォールバック処理
+                fallback_enabled = guild_settings.get(server_id, {}).get("fallback_delete", False)
+
+                if fallback_enabled and duration:
+                    end_time = (datetime.datetime.now() + duration).timestamp()
+                    fallback_mutes.setdefault(server_id, {})[user_id] = end_time
+                    fallback_mutes_save()
+                    
+                    embed.add_field(
+                        name="⚠️ 権限不足 (代替措置適用)",
+                        value=f"タイムアウト権限が不足しているため、<t:{int(end_time)}:R> までメッセージを即時削除する措置を適用しました。",
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name="⚠️ ペナルティ適用失敗",
+                        value="Botの権限が不足している、または対象ユーザーの役職がBotより高いため、ペナルティを付与できませんでした。",
+                        inline=False
+                    )
                 print(f"Failed to apply penalty to {message.author.name} due to missing permissions.")
 
         await message.reply(embed=embed, mention_author=True)
         
         if target_user_id in ngwords.get(server_id, {}):
             ngwords[server_id][target_user_id].remove(detected_word)
-
             if not ngwords[server_id][target_user_id]:
                 del ngwords[server_id][target_user_id]
             ngwords_save()
