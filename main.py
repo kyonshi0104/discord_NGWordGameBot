@@ -243,12 +243,10 @@ async def on_message(message):
     if detected_word:
         embed = discord.Embed(
             title="NGWORD_DETECTED",
-            description=f"NGワードが検出されました: **{detected_word}**\n設定者: <@{target_user_id}>",
+            description=f"NGワードが検出されました: **{detected_word}**\n設定者: <@{target_user_id}>\n設定者はNGワードを再設定できます。",
             color=discord.Color.red()
         )
-        await message.reply(embed=embed, mention_author=True)
         
-        # --- ペナルティ処理 ---
         server_penalty = penalties.get(server_id)
         if server_penalty:
             try:
@@ -263,9 +261,15 @@ async def on_message(message):
                 elif server_penalty == "ban":
                     await message.author.ban(reason="Used an NG word.")
             except discord.Forbidden:
+                embed.add_field(
+                    name="⚠️ ペナルティ適用失敗",
+                    value="Botの権限が不足している、または対象ユーザーの役職がBotより高いため、ペナルティを付与できませんでした。",
+                    inline=False
+                )
                 print(f"Failed to apply penalty to {message.author.name} due to missing permissions.")
 
-        # --- NGワードの削除処理 ---
+        await message.reply(embed=embed, mention_author=True)
+        
         if target_user_id in ngwords.get(server_id, {}):
             ngwords[server_id][target_user_id].remove(detected_word)
 
