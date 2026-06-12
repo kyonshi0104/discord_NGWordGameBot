@@ -60,7 +60,7 @@ async def guild_autocomplete(
     choices = []
     
     for guild in client.guilds:
-        member = guild.get_member(interaction.user.id)
+        member = guild.fetch_member(interaction.user.id)
         if member is None:
             continue  # 所属していないサーバーは候補に出さない
             
