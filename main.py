@@ -255,8 +255,7 @@ async def game_status(interaction: discord.Interaction):
     
     excluded_mentions = [f"<@{uid}>" for uid in guild_settings.get(server_id, {}).get("nogame", [])]
     excluded_str = ", ".join(excluded_mentions) if excluded_mentions else "None"
-    
-    # --- 代替措置のステータス取得を追加 ---
+
     fallback_enabled = guild_settings.get(server_id, {}).get("fallback_delete", False)
     fallback_str = "有効" if fallback_enabled else "無効"
 
@@ -269,10 +268,14 @@ async def game_status(interaction: discord.Interaction):
             del fallback_mutes[server_id][user_id]
             fallback_mutes_save()
 
+    server_ng_dict = ngwords.get(server_id, {})
+    total_ngwords = sum(len(words) for words in server_ng_dict.values())
+
     embed = discord.Embed(
         title="GAME STATUS",
         description=(
-            f"**NGword count:** {len(ngwords.get(server_id, {}).get(user_id, []))}\n"
+            f"**Your NGword count:** {len(server_ng_dict.get(user_id, []))}\n"
+            f"**Server Total NGwords:** {total_ngwords}\n"
             f"**Server Penalty:** {server_penalty}\n"
             f"**Fallback Setting:** {fallback_str}\n"
             f"**Current Fallback:** {mute_status}\n"
