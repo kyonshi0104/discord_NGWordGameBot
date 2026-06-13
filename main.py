@@ -323,12 +323,10 @@ async def on_message(message):
             break
 
     if detected_word:
-        # サーバーの設定言語を取得
-        guild_locale = message.guild.preferred_locale.split("-")[0]
+        guild_locale = message.guild.preferred_locale.value.split("-")[0]
 
         embed = discord.Embed(
             title=_("NGWORD_DETECTED_TITLE", guild_locale),
-            # 【重要】locales.jsonの定義に合わせて、formatに user=target_user_id を追加
             description=_("NGWORD_DETECTED_DESC", guild_locale).format(word=detected_word, user=target_user_id),
             color=discord.Color.red()
         )
