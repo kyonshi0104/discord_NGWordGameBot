@@ -2,7 +2,8 @@
 
 サーバーごとにNGワードを設定し、使用したユーザーに対して自動でペナルティ（ミュート、キック、BAN）を科すことができるDiscord Botです。Botの権限が不足している場合の「代替措置（メッセージ即時削除）」機能や、多言語対応（日本語/英語）を備えています。
 
-自身でホストすることを想定していますが、製作者:kyonshiがホストしている[Discord BOT](https://discord.com/oauth2/authorize?client_id=1515005326728888400&permissions=8&integration_type=0&scope=bot+applications.commands)を利用することもできます。
+自身でホストすることを想定していますが、  
+製作者:kyonshiがホストしている[Discord BOT](https://discord.com/oauth2/authorize?client_id=1515005326728888400&permissions=8&integration_type=0&scope=bot+applications.commands)を利用することもできます。
 
 (おそらく問題ありませんが動作についての保証はしません。また管理者権限の受け入れが必要です。)
 
